@@ -14,13 +14,13 @@ router.post('/query', async (req, res) => {
   try {
     // 1. Fetch categorized transactions for the user from the database
     const result = await pool.query(
-      'SELECT date, amount, description, category, tax_label FROM transactions WHERE user_id = $1 ORDER BY date DESC',
+      'SELECT date, amount, description, tax_category FROM transactions WHERE user_id = $1 ORDER BY date DESC',
       [userId]
     );
     const transactions = result.rows;
     
     // 2. Pass the user query and transactions to the chat service
-    const summary = generateBusinessHealthSummary(userQuery, transactions);
+    const summary = generateBusinessHealthSummary(userId, userQuery, transactions);
     
     // 3. Return the plain English summary
     res.json({ response: summary });

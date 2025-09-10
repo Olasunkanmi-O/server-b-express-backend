@@ -12,31 +12,31 @@ const VAT_RATE_GB = 0.20; // 20% for most goods and services
  * @returns {Object} - An object containing the total sales and calculated VAT.
  */
 function calculateVAT(transactions) {
-  let totalSales = 0;
+  let vatDue = 0;
+  let vatReclaimable = 0;
+
   for (const tx of transactions) {
-    // Assuming transactions are already categorized and we only process sales
-    if (tx.category === 'Sales') {
-      totalSales += parseFloat(tx.amount);
+    const amount = parseFloat(tx.amount);
+    const vatRate = parseFloat(tx.vat_rate || 0);
+    const vatAmount = amount * vatRate;
+
+    if (tx.tax_category === 'Sales' && tx.vat_applicable) {
+      vatDue += vatAmount;
+    } else if (tx.deductible && tx.vat_applicable) {
+      vatReclaimable += vatAmount;
     }
   }
-  const vatAmount = totalSales * VAT_RATE_GB;
-  return { totalSales, vatAmount };
+
+  return { vatDue, vatReclaimable };
 }
 
-/**
- * Calculates a simplified Corporation Tax.
- * Assumes a fixed rate and is based on a company's total profit.
- * @param {Object} financials - Object containing total income and total expenses.
- * @returns {number} - The calculated corporation tax amount.
- */
-function calculateCorporationTax(financials) {
-  const { totalIncome, totalExpenses } = financials;
+function calculateCorporationTax({ totalIncome, totalExpenses }) {
   const profit = totalIncome - totalExpenses;
-  const CORPORATION_TAX_RATE = 0.25; // A simplified rate for demonstration
+  const CORPORATION_TAX_RATE = 0.25;
   return profit > 0 ? profit * CORPORATION_TAX_RATE : 0;
 }
 
 module.exports = {
   calculateVAT,
-  calculateCorporationTax,
+  calculateCorporationTax
 };

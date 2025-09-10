@@ -107,7 +107,7 @@ router.get('/transactions', async (req, res) => {
           const amount = transaction.amount || 0;
 
           await client.query(
-            `INSERT INTO transactions (user_id, plaid_transaction_id, date, description, amount, category) 
+            `INSERT INTO transactions (user_id, plaid_transaction_id, date, description, amount, plaid_category) 
             VALUES ($1, $2, $3, $4, $5, $6)`,
             [userId, transaction.transaction_id, transaction.date, description, amount, category]
           );

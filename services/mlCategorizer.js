@@ -1,35 +1,32 @@
-// services/mlCategorizer.js
-/**
- * A placeholder for a machine learning model.
- * This function simulates transaction categorization for the MVP.
- * A real ML model would be called here to return a category label.
- * @param {Object} transaction - A single transaction object from Plaid.
- * @returns {string} The assigned category for the transaction.
- */
-function categorizeTransaction(transaction) {
-  const { name, amount } = transaction;
+const pool = require('../db');
 
-  // Simple rule-based categorization for MVP
+async function categorizeTransaction(transaction) {
+  const { name, amount, plaid_category } = transaction;
   const description = name.toLowerCase();
 
-  if (description.includes('hmrc')) {
-    return 'Tax';
-  }
-  if (description.includes('salary') || description.includes('payroll')) {
-    return 'Income';
-  }
-  if (description.includes('rent') || description.includes('mortgage')) {
-    return 'Rent/Mortgage';
-  }
-  if (description.includes('utility') || description.includes('electricity') || description.includes('gas')) {
-    return 'Utilities';
-  }
-  if (amount > 0) { // Assuming positive amounts are income
-    return 'Sales';
+  // Step 1: Try to map Plaid category from DB
+  if (plaid_category) {
+    const result = await pool.query(
+      'SELECT tax_category, deductible, vat_applicable FROM category_mappings WHERE plaid_category = $1 LIMIT 1',
+      [plaid_category]
+    );
+    if (result.rows.length > 0) {
+      return result.rows[0];
+    }
   }
 
-  // Default to a general category if no rule matches
-  return 'General Expense';
+  // Step 2: Fallback to rule-based logic
+  let tax_category = 'General Expense';
+  let deductible = true;
+  let vat_applicable = true;
+
+  if (description.includes('hmrc')) tax_category = 'Tax';
+  else if (description.includes('salary') || description.includes('payroll')) tax_category = 'Income';
+  else if (description.includes('rent') || description.includes('mortgage')) tax_category = 'Rent/Mortgage';
+  else if (description.includes('utility') || description.includes('electricity') || description.includes('gas')) tax_category = 'Utilities';
+  else if (amount > 0) tax_category = 'Sales';
+
+  return { tax_category, deductible, vat_applicable };
 }
 
 module.exports = {

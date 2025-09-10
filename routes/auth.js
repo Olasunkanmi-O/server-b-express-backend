@@ -10,6 +10,7 @@ const { generateToken } = require('../utils/jwt');
 // Signup route
 router.post('/signup', async (req, res) => {
   console.log('Signup route hit');
+  console.log('Received signup payload:', req.body);
 
   const {
     business_name,
@@ -17,7 +18,7 @@ router.post('/signup', async (req, res) => {
     vat_enabled,
     has_employees,
     num_employees,
-    username,
+    email,
     password,
   } = req.body;
 
@@ -27,7 +28,7 @@ router.post('/signup', async (req, res) => {
     business_structure,
     vat_enabled,
     has_employees,
-    username,
+    email,
     password,
   ].some(field => field === undefined || field === null || field === '');
 
@@ -43,10 +44,10 @@ router.post('/signup', async (req, res) => {
     const query = `
       INSERT INTO users (
         business_name, business_structure, vat_enabled,
-        has_employees, num_employees, username, password
+        has_employees, num_employees, email, password
       )
       VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING id, username, business_name
+      RETURNING id, email, business_name
     `;
 
     const values = [
@@ -55,7 +56,7 @@ router.post('/signup', async (req, res) => {
       vat_enabled,
       has_employees,
       numEmp,
-      username,
+      email,
       hashedPassword,
     ];
 
@@ -67,7 +68,7 @@ router.post('/signup', async (req, res) => {
     });
   } catch (err) {
     if (err.code === '23505') {
-      return res.status(409).json({ error: 'Username already exists' });
+      return res.status(409).json({ error: 'User already exists' });
     }
 
     console.error('Signup error:', err);
@@ -77,14 +78,15 @@ router.post('/signup', async (req, res) => {
 
 // Login route
 router.post('/login', async (req, res) => {
-  const { username, password } = req.body;
+  const { email, password } = req.body;
+  console.log(`Login attempt for email: ${email}`);
 
-  if (!username || !password) {
-    return res.status(400).json({ error: "Username and password required" });
+  if (!email || !password) {
+    return res.status(400).json({ error: "Email and Password required" });
   }
 
   try {
-    const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
 
     if (result.rows.length === 0) {
       return res.status(401).json({ error: "Invalid credentials" });
@@ -98,7 +100,8 @@ router.post('/login', async (req, res) => {
     }
 
     // ✅ Generate JWT token here
-    const token = generateToken(user);
+    const token = generateToken(user);  
+    console.log(`User ${user.email} logged in successfully`);
 
     // ✅ Remove sensitive info
     delete user.password;
