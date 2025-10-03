@@ -3,9 +3,9 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
-const transactionRoutes = require('./routes/transactions');
+//const transactionRoutes = require('./routes/transactions');
 const plaidRoutes = require('./routes/plaid');
-const chatRoutes = require('./routes/chat');
+//const chatRoutes = require('./routes/chat');
 const cors = require('cors');
 const app = express();
 
@@ -22,9 +22,9 @@ app.get('/', (req, res) => {
 // Mount routes with base URL prefixes
 app.use('/auth', authRoutes);     // Signup, login
 app.use('/users', userRoutes);    // User profile, management
-app.use('/transactions', transactionRoutes);
+//app.use('/transactions', transactionRoutes);
 app.use('/plaid', plaidRoutes);
-app.use('/chat', chatRoutes);
+//app.use('/chat', chatRoutes);
 
 
 module.exports = app;

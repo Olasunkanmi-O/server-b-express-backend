@@ -55,9 +55,10 @@ router.post('/exchange_public_token', async (req, res) => {
   }
 });
 
-// This route retrieves transactions from Plaid and saves them
 router.get('/transactions', async (req, res) => {
+  console.log(`🚀 /transactions route triggered for user ${req.query.userId}`);
   const { userId, start_date, end_date } = req.query;
+  console.log(`🔍 Starting transaction sync for user ${userId} from ${start_date} to ${end_date}`);
 
   try {
     const accountResult = await pool.query(
@@ -66,10 +67,12 @@ router.get('/transactions', async (req, res) => {
     );
 
     if (accountResult.rows.length === 0) {
+      console.warn(`⚠️ No Plaid account found for user ${userId}`);
       return res.status(404).json({ error: 'Plaid account not found for this user' });
     }
 
     const accessToken = accountResult.rows[0].access_token;
+    console.log(`✅ Retrieved access token for user ${userId}`);
 
     const transactionResponse = await plaidClient.transactionsGet({
       access_token: accessToken,
@@ -77,12 +80,14 @@ router.get('/transactions', async (req, res) => {
       end_date: end_date,
     });
 
-    // Check if the Plaid response contains data and transactions
-    if (!transactionResponse || !transactionResponse.data || !transactionResponse.data.transactions) {
+    if (!transactionResponse?.data?.transactions) {
+      console.warn(`⚠️ No transactions returned from Plaid for user ${userId}`);
       return res.status(200).json([]);
     }
 
     const transactions = transactionResponse.data.transactions;
+    console.log(`📥 Received ${transactions.length} transactions from Plaid`);
+
     const client_transactions = [];
     const client = await pool.connect();
 
@@ -90,8 +95,8 @@ router.get('/transactions', async (req, res) => {
       await client.query('BEGIN');
 
       for (const transaction of transactions) {
-        // Ensure the transaction has a valid ID before attempting to process
         if (!transaction.transaction_id) {
+          console.warn(`⛔️ Skipping transaction with missing ID:`, transaction);
           continue;
         }
 
@@ -101,42 +106,65 @@ router.get('/transactions', async (req, res) => {
         );
 
         if (existingTx.rows.length === 0) {
-          // Corrected line: Access the 'detailed' property of the category object
-          const category = transaction.personal_finance_category ? transaction.personal_finance_category.detailed : 'Uncategorized';
+          const category = transaction.personal_finance_category?.detailed || 'Uncategorized';
           const description = transaction.name || 'No Description';
           const amount = transaction.amount || 0;
 
+          console.log(`📝 Inserting new transaction: ${transaction.transaction_id} | £${amount} | ${category}`);
+
           await client.query(
             `INSERT INTO transactions (user_id, plaid_transaction_id, date, description, amount, plaid_category) 
-            VALUES ($1, $2, $3, $4, $5, $6)`,
+             VALUES ($1, $2, $3, $4, $5, $6)`,
             [userId, transaction.transaction_id, transaction.date, description, amount, category]
           );
+        } else {
+          console.log(`🔁 Transaction already exists: ${transaction.transaction_id}`);
         }
 
         client_transactions.push({
           id: transaction.transaction_id,
           amount: transaction.amount,
-          category: transaction.personal_finance_category ? transaction.personal_finance_category.detailed : 'Uncategorized',
+          category: transaction.personal_finance_category?.detailed || 'Uncategorized',
           date: transaction.date,
           description: transaction.name
         });
       }
 
       await client.query('COMMIT');
+      console.log(`✅ Successfully synced ${client_transactions.length} transactions for user ${userId}`);
       res.status(200).json(client_transactions);
 
     } catch (dbErr) {
       await client.query('ROLLBACK');
-      console.error('Database transaction failed:', dbErr);
+      console.error('❌ Database transaction failed:', dbErr);
       res.status(500).json({ error: 'Failed to synchronize transactions.' });
     } finally {
       client.release();
     }
 
   } catch (plaidErr) {
-    console.error('Plaid API error:', plaidErr);
+    console.error('❌ Plaid API error:', plaidErr);
     res.status(500).json({ error: 'Failed to retrieve transactions from Plaid.' });
   }
 });
+
+// this routes check whether the user has successfully connected their bank through plaid 
+router.get("/plaid-status/:userId", async (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    const result = await pool.query(
+      "SELECT access_token FROM user_plaid_accounts WHERE user_id = $1",
+      [userId]
+    );
+
+    const connected = result.rows.length > 0 && !!result.rows[0].access_token;
+    res.json({ connected });
+  } catch (err) {
+    console.error("Error checking Plaid status:", err);
+    res.status(500).json({ error: "Failed to check Plaid status" });
+  }
+});
+
 
 module.exports = router;
